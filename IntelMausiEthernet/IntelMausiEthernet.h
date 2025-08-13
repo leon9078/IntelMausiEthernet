@@ -236,7 +236,6 @@ enum
 #define kParamName "Driver Parameters"
 #define kEnableCSO6Name "enableCSO6"
 #define kEnableWoMName "enableWakeOnAddrMatch"
-#define kEnableWakeS5Name "enableWakeS5"
 #define kIntrRate10Name "maxIntrRate10"
 #define kIntrRate100Name "maxIntrRate100"
 #define kIntrRate1000Name "maxIntrRate1000"
@@ -426,6 +425,13 @@ private:
     /* timer action */
     void timerAction(IOTimerEventSource *timer);
     
+    /* Set wolActive prior to shutdown or restart to support WoL from S5
+     * if "Wake for network access" or "womp" is enabled or mausi-wol-override=1
+     * is set via boot-args and run the hardware
+     * enable/disable routines if the controller is already disabled.
+     */
+    void setWakeOnLanFromShutdown();
+
 private:
 	IOWorkLoop *workLoop;
     IOCommandGate *commandGate;
@@ -514,9 +520,10 @@ private:
     bool forceReset;
     bool wolCapable;
     bool wolActive;
+    bool wolPwrOff;
+    bool mausiwoloverride;
     bool enableCSO6;
     bool enableWoM;
-    bool enableWakeS5;
     
     /* mbuf_t arrays */
     struct intelTxBufferInfo txBufArray[kNumTxDesc];

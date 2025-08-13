@@ -182,9 +182,10 @@ bool IntelMausi::init(OSDictionary *properties)
         pciDeviceData.revision = 0;
         adapterData.pdev = &pciDeviceData;
         mtu = ETH_DATA_LEN;
-        enableWakeS5 = false;
         wolCapable = false;
         wolActive = false;
+        wolPwrOff = false;
+        mausiwoloverride = false;
         enableCSO6 = false;
         pciPMCtrlOffset = 0;
         maxLatency = 0;
@@ -306,6 +307,9 @@ bool IntelMausi::start(IOService *provider)
         IOLog("[IntelMausi]: attachInterface() failed.\n");
         goto error4;
     }
+    if (PE_parse_boot_argn("mausi-wol-override", &mausiwoloverride, sizeof(mausiwoloverride))) {
+        wolPwrOff = true;
+    }
     pciDevice->close(this);
     result = true;
     
@@ -420,13 +424,7 @@ void IntelMausi::systemWillShutdown(IOOptionBits specifier)
     DebugLog("systemWillShutdown() ===>\n");
     
     if ((kIOMessageSystemWillPowerOff | kIOMessageSystemWillRestart) & specifier) {
-        /*
-         * Enable WoL if the machine is going to power off and WoL from S5
-         * is enabled.
-         */
-        if (enableWakeS5 && (kIOMessageSystemWillPowerOff & specifier)) {
-            wolActive = true;
-        }
+        setWakeOnLanFromShutdown();
         disable(netif);
         
         /* Restore the original MAC address. */
@@ -942,6 +940,39 @@ IOReturn IntelMausi::setWakeOnMagicPacket(bool active)
     DebugLog("setWakeOnMagicPacket() <===\n");
     
     return result;
+}
+
+void IntelMausi::setWakeOnLanFromShutdown()
+{
+    DebugLog("[IntelMausi]: setWakeOnLanFromShutdown() ===>\n");
+
+    if (wolCapable) {
+        if (!wolPwrOff) {
+            unsigned long wakeSetting = 0;
+
+            getAggressiveness(kPMEthernetWakeOnLANSettings, &wakeSetting);
+
+            if (kIOEthernetWakeOnMagicPacket & wakeSetting) {
+                wolActive = true;
+                DebugLog("[IntelMausi]: Wake on magic packet enabled.\n");
+            }
+            if (!isEnabled && wolActive) {
+                intelEnable();
+                intelDisable();
+                DebugLog("[IntelMausi]: Wake on LAN from shutdown active.\n");
+            }
+        } else {
+            wolActive = mausiwoloverride;
+            DebugLog("[IntelMausi]: Wake on magic packet %s.\n", wolActive ? "enabled" : "disabled");
+            if (!isEnabled && wolActive) {
+                intelEnable();
+                intelDisable();
+                DebugLog("[IntelMausi]: Wake on LAN from shutdown active.\n");
+            }
+        }
+    }
+
+    DebugLog("[IntelMausi]: setWakeOnLanFromShutdown() <===\n");
 }
 
 IOReturn IntelMausi::getPacketFilters(const OSSymbol *group, UInt32 *filters) const
@@ -1802,7 +1833,7 @@ bool IntelMausi::intelStart()
     if ((hw->mac.type == e1000_pch_lpt) || (hw->mac.type == e1000_pch_spt)) {
         intrMask |= E1000_IMS_ECCER;
     }
-    IOLog("[IntelMausi]: %s (Rev. %u), %02x:%02x:%02x:%02x:%02x:%02x\n",
+    IOLog("[IntelMausi]: %s (Rev. %u), %02X:%02X:%02X:%02X:%02X:%02X\n",
           deviceTable[chip].deviceName, pciDeviceData.revision,
           mac->addr[0], mac->addr[1], mac->addr[2], mac->addr[3], mac->addr[4], mac->addr[5]);
     result = true;
