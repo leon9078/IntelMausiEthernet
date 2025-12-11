@@ -68,7 +68,6 @@ void IntelMausi::getParams()
     OSBoolean *tso6;
     OSBoolean *csoV6;
     OSBoolean *wom;
-    OSBoolean *ws5;
     UInt32 newIntrRate10;
     UInt32 newIntrRate100;
     UInt32 newIntrRate1000;
@@ -99,12 +98,12 @@ void IntelMausi::getParams()
         tso4 = OSDynamicCast(OSBoolean, params->getObject(kEnableTSO4Name));
         enableTSO4 = (tso4) ? tso4->getValue() : false;
           
-        IOLog("Ethernet [IntelMausi]: TCP/IPv4 segmentation offload %s.\n", enableTSO4 ? onName : offName);
+        IOLog("TCP/IPv4 segmentation offload %s.\n", enableTSO4 ? onName : offName);
           
         tso6 = OSDynamicCast(OSBoolean, params->getObject(kEnableTSO6Name));
         enableTSO6 = (tso6) ? tso6->getValue() : false;
           
-        IOLog("Ethernet [IntelMausi]: TCP/IPv6 segmentation offload %s.\n", enableTSO6 ? onName : offName);
+        IOLog("TCP/IPv6 segmentation offload %s.\n", enableTSO6 ? onName : offName);
           
         csoV6 = OSDynamicCast(OSBoolean, params->getObject(kEnableCSO6Name));
         enableCSO6 = (csoV6) ? csoV6->getValue() : false;
@@ -115,11 +114,6 @@ void IntelMausi::getParams()
         enableWoM = (wom) ? wom->getValue() : false;
 
         IOLog("Wake on address match %s.\n", enableWoM ? onName : offName);
-
-        ws5 = OSDynamicCast(OSBoolean, params->getObject(kEnableWakeS5Name));
-        enableWakeS5 = (ws5) ? ws5->getValue() : false;
-        
-        IOLog("WoL from S5 %s.\n", enableWakeS5 ? onName : offName);
 
         /* Get maximum interrupt rate for 10M. */
         num = OSDynamicCast(OSNumber, params->getObject(kIntrRate10Name));
@@ -234,7 +228,6 @@ void IntelMausi::getParams()
         /* Use default values in case of missing config data. */
         enableCSO6 = false;
         enableWoM = false;
-        enableWakeS5 = false;
         newIntrRate10 = 3000;
         newIntrRate100 = 5000;
         newIntrRate1000 = 7000;
@@ -252,9 +245,9 @@ void IntelMausi::getParams()
     DebugLog("rxAbsTime10=%u, rxAbsTime100=%u, rxAbsTime1000=%u, rxDelayTime10=%u, rxDelayTime100=%u, rxDelayTime1000=%u. \n", rxAbsTime10, rxAbsTime100, rxAbsTime1000, rxDelayTime10, rxDelayTime100, rxDelayTime1000);
     
     if (versionString)
-        IOLog("Version %s using max interrupt rates [%u; %u; %u]. Please don't support tonymacx86.com!\n", versionString->getCStringNoCopy(), newIntrRate10, newIntrRate100, newIntrRate1000);
+        IOLog("Version %s using max interrupt rates [%u; %u; %u].\n", versionString->getCStringNoCopy(), newIntrRate10, newIntrRate100, newIntrRate1000);
     else
-        IOLog("Using max interrupt rates [%u; %u; %u. Please don't support tonymacx86.com!\n", intrThrValue10, intrThrValue100, intrThrValue1000);
+        IOLog("Using max interrupt rates [%u; %u; %u].\n", intrThrValue10, intrThrValue100, intrThrValue1000);
 }
 
 bool IntelMausi::setupMediumDict()
