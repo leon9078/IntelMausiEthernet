@@ -191,9 +191,10 @@ bool IntelMausi::init(OSDictionary *properties)
         pciDeviceData.revision = 0;
         adapterData.pdev = &pciDeviceData;
         mtu = ETH_DATA_LEN;
-        enableWakeS5 = false;
         wolCapable = false;
         wolActive = false;
+        wolPwrOff = false;
+        mausiwoloverride = false;
         enableTSO4 = false;
         enableTSO6 = false;
         enableCSO6 = false;
@@ -321,6 +322,9 @@ bool IntelMausi::start(IOService *provider)
         IOLog("attachInterface() failed.\n");
         goto error_event;
     }
+    if (PE_parse_boot_argn("mausi-wol-override", &mausiwoloverride, sizeof(mausiwoloverride))) {
+        wolPwrOff = true;
+    }
     pciDevice->close(this);
     result = true;
     
@@ -439,13 +443,7 @@ void IntelMausi::systemWillShutdown(IOOptionBits specifier)
     DebugLog("systemWillShutdown() ===>\n");
     
     if ((kIOMessageSystemWillPowerOff | kIOMessageSystemWillRestart) & specifier) {
-        /*
-         * Enable WoL if the machine is going to power off and WoL from S5
-         * is enabled.
-         */
-        if (enableWakeS5 && (kIOMessageSystemWillPowerOff & specifier)) {
-            wolActive = true;
-        }
+        setWakeOnLanFromShutdown();
         disable(netif);
         
         /* Restore the original MAC address. */
@@ -608,7 +606,7 @@ IOReturn IntelMausi::outputStart(IONetworkInterface *interface, IOOptionBits opt
                 tcpConfig = ((kTCPv4CSumEnd << 16) | (kTCPv4CSumOffset << 8) | kTCPv4CSumStart);
                 len |= (E1000_TXD_CMD_DEXT | E1000_TXD_CMD_TSE | E1000_TXD_CMD_IP | E1000_TXD_CMD_TCP);
                 
-                //DebugLog("Ethernet [IntelMausi]: TSO4 mssHeaderLen=0x%08x, payload=0x%08x\n", mss, len);
+                //DebugLog("TSO4 mssHeaderLen=0x%08x, payload=0x%08x\n", mss, len);
                 
                 /* Setup the command bits for TSO over IPv4. */
                 cmd = (E1000_TXD_CMD_DEXT | E1000_TXD_CMD_TSE | E1000_TXD_DTYP_D);
@@ -1042,6 +1040,39 @@ IOReturn IntelMausi::setWakeOnMagicPacket(bool active)
     DebugLog("setWakeOnMagicPacket() <===\n");
     
     return result;
+}
+
+void IntelMausi::setWakeOnLanFromShutdown()
+{
+    DebugLog("setWakeOnLanFromShutdown() ===>\n");
+
+    if (wolCapable) {
+        if (!wolPwrOff) {
+            unsigned long wakeSetting = 0;
+
+            getAggressiveness(kPMEthernetWakeOnLANSettings, &wakeSetting);
+
+            if (kIOEthernetWakeOnMagicPacket & wakeSetting) {
+                wolActive = true;
+                DebugLog("Wake on magic packet enabled.\n");
+            }
+            if (!isEnabled && wolActive) {
+                intelEnable();
+                intelDisable();
+                DebugLog("Wake on LAN from shutdown active.\n");
+            }
+        } else {
+            wolActive = mausiwoloverride;
+            DebugLog("Wake on magic packet %s.\n", wolActive ? "enabled" : "disabled");
+            if (!isEnabled && wolActive) {
+                intelEnable();
+                intelDisable();
+                DebugLog("Wake on LAN from shutdown active.\n");
+            }
+        }
+    }
+
+    DebugLog("setWakeOnLanFromShutdown() <===\n");
 }
 
 IOReturn IntelMausi::getPacketFilters(const OSSymbol *group, UInt32 *filters) const
